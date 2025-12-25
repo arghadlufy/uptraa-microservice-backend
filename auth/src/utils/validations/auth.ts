@@ -66,6 +66,21 @@ export const registerSchema = z
 // Infer TypeScript type from the schema
 export type RegisterInput = z.infer<typeof registerSchema>;
 
+export const loginSchema = z.object({
+  email: z
+    .email({ message: "Please provide a valid email address" })
+    .min(1, "Email cannot be empty")
+    .max(255, "Email must be less than 255 characters")
+    .toLowerCase()
+    .trim(),
+  password: z
+    .string({ message: "Password must be a string" })
+    .min(8, "Password must be at least 8 characters long")
+    .max(255, "Password must be less than 255 characters"),
+});
+
+export type LoginInput = z.infer<typeof loginSchema>;
+
 // Transform Zod errors to user-friendly format
 export function formatZodError(error: z.ZodError): string {
   const errors = error.issues.map((err) => {
@@ -80,6 +95,16 @@ export function formatZodError(error: z.ZodError): string {
 export function validateRegisterInput(data: unknown): RegisterInput {
   const result = registerSchema.safeParse(data);
 
+  if (!result.success) {
+    const errorMessage = formatZodError(result.error);
+    throw new ErrorHandler(400, errorMessage);
+  }
+
+  return result.data;
+}
+
+export function validateLoginInput(data: unknown): LoginInput {
+  const result = loginSchema.safeParse(data);
   if (!result.success) {
     const errorMessage = formatZodError(result.error);
     throw new ErrorHandler(400, errorMessage);
