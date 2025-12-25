@@ -4,6 +4,8 @@ import type { AuthenticatedRequest, User } from "../middlewares/auth.js";
 import { sql } from "../utils/db.js";
 import { ErrorHandler } from "../utils/error-handler.js";
 import { validateUpdateUserProfileInput } from "../utils/validations/user.js";
+import { getBuffer } from "../utils/buffer.js";
+import axios from "axios";
 
 export const myProfile = tryCatch(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -70,6 +72,46 @@ export const updateUserProfile = tryCatch(
     res.status(200).json({
       success: true,
       message: "User profile updated successfully",
+      user: updatedUser,
+    });
+  }
+);
+
+export const updateProfilePicture = tryCatch(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const user = req.user;
+    if (!user) {
+      throw new ErrorHandler(401, "Authentication required");
+    }
+    const file = req.file;
+
+    if (!file) {
+      throw new ErrorHandler(400, "Profile picture is required");
+    }
+
+    const fileBuffer = getBuffer(file);
+
+    if (!fileBuffer || !fileBuffer.content) {
+      throw new ErrorHandler(400, "Invalid file");
+    }
+
+    const oldProfilePicPublicId = user.profile_pic_public_id;
+
+    const { data } = await axios.post(
+      `${process.env.PACKAGES_SERVICE_URL}/api/packages/upload`,
+      {
+        buffer: fileBuffer.content,
+        public_id: oldProfilePicPublicId,
+      }
+    );
+
+    const [updatedUser] = await sql`
+      UPDATE users SET profile_pic = ${data.url}, profile_pic_public_id = ${data.public_id} WHERE id = ${user.id} RETURNING id, name, email, phone_number, role, bio, resume, resume_public_id, profile_pic, profile_pic_public_id, created_at, updated_at
+    `;
+
+    res.status(200).json({
+      success: true,
+      message: "Profile picture updated successfully",
       user: updatedUser,
     });
   }

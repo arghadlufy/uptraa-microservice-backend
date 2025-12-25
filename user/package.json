@@ -16,6 +16,7 @@
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
     "@types/morgan": "^1.9.10",
+    "axios": "^1.13.2",
     "cors": "^2.8.5",
     "datauri": "^4.1.0",
     "dotenv": "^17.2.3",
