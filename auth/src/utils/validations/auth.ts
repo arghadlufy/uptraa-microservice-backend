@@ -91,6 +91,17 @@ export function formatZodError(error: z.ZodError): string {
   return errors.join(", ");
 }
 
+export const forgotPasswordSchema = z.object({
+  email: z
+    .email({ message: "Please provide a valid email address" })
+    .min(1, "Email cannot be empty")
+    .max(255, "Email must be less than 255 characters")
+    .toLowerCase()
+    .trim(),
+});
+
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+
 // Validate function that throws ErrorHandler if validation fails
 export function validateRegisterInput(data: unknown): RegisterInput {
   const result = registerSchema.safeParse(data);
@@ -105,6 +116,18 @@ export function validateRegisterInput(data: unknown): RegisterInput {
 
 export function validateLoginInput(data: unknown): LoginInput {
   const result = loginSchema.safeParse(data);
+  if (!result.success) {
+    const errorMessage = formatZodError(result.error);
+    throw new ErrorHandler(400, errorMessage);
+  }
+
+  return result.data;
+}
+
+export function validateForgotPasswordInput(
+  data: unknown
+): ForgotPasswordInput {
+  const result = forgotPasswordSchema.safeParse(data);
   if (!result.success) {
     const errorMessage = formatZodError(result.error);
     throw new ErrorHandler(400, errorMessage);

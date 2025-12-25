@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { tryCatch } from "../utils/try-catch.js";
 import {
+  validateForgotPasswordInput,
   validateLoginInput,
   validateRegisterInput,
 } from "../utils/validations/auth.js";
@@ -10,6 +11,8 @@ import bcrypt from "bcrypt";
 import { getBuffer } from "../utils/buffer.js";
 import axios from "axios";
 import jwt from "jsonwebtoken";
+import { forgotPasswordTemplate } from "../utils/email/forgot-password-template.js";
+import { publistToTopic } from "../producer.js";
 
 export const registerUser = tryCatch(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -126,6 +129,52 @@ export const loginUser = tryCatch(
       message: "Login successful",
       user: userObject,
       token,
+    });
+  }
+);
+
+export const forgotPassword = tryCatch(
+  async (req: Request, res: Response, next: NextFunction) => {
+    // Validate and get typed data
+    const validatedData = validateForgotPasswordInput(req.body);
+    const { email } = validatedData;
+
+    const users = await sql`SELECT id, email FROM users WHERE email = ${email}`;
+
+    if (users.length === 0) {
+      console.log("❌ [AUTH SERVICE] User not found");
+      return res.status(200).json({
+        success: true,
+        message:
+          "If the email exists, a password reset email will be sent to you",
+      });
+    }
+
+    const user = users[0];
+
+    const resetToken = jwt.sign(
+      { email: user?.email, type: "reset" },
+      process.env.JWT_SECRET! as string,
+      {
+        expiresIn: process.env
+          .JWT_RESET_PASSWORD_EXPIRES_IN! as unknown as number,
+      }
+    );
+
+    const resetPasswordUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+
+    const message = {
+      to: email,
+      subject: "Uptraa - Reset Password",
+      html: forgotPasswordTemplate(user?.name || "", resetPasswordUrl),
+    };
+
+    publistToTopic("send-mail", message);
+
+    res.status(200).json({
+      success: true,
+      message:
+        "If the email exists, a password reset email will be sent to you",
     });
   }
 );

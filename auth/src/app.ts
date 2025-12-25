@@ -1,6 +1,7 @@
 import express from "express";
 import authRoutes from "./routes/auth.js";
 import { consoleLogger, requestLogger } from "./utils/logger.js";
+import { connectKafka } from "./producer.js";
 
 const app = express();
 
@@ -14,6 +15,8 @@ if (process.env.NODE_ENV !== "production") {
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+connectKafka();
 
 app.use("/api/auth", authRoutes);
 
