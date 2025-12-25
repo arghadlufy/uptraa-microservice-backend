@@ -210,11 +210,19 @@ export const resetPassword = tryCatch(
       throw new ErrorHandler(401, "Invalid token");
     }
 
+    const users =
+      await sql`SELECT id, email FROM users WHERE email = ${decodedToken.email}`;
+
+    if (users.length === 0) {
+      throw new ErrorHandler(401, "User not found");
+    }
+    const user = users[0];
+
     await redisClient.del(`forgot:${decodedToken.email}`);
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await sql`UPDATE users SET password = ${hashedPassword} WHERE email = ${decodedToken.email}`;
+    await sql`UPDATE users SET password = ${hashedPassword} WHERE email = ${user?.email}`;
 
     res.status(200).json({
       success: true,
