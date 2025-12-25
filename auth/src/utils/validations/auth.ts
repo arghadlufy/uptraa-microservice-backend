@@ -102,6 +102,20 @@ export const forgotPasswordSchema = z.object({
 
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 
+export const resetPasswordSchema = z.object({
+  token: z
+    .string({ message: "Token must be a string" })
+    .min(1, "Token cannot be empty")
+    .trim(),
+  password: z
+    .string({ message: "Password must be a string" })
+    .min(8, "Password must be at least 8 characters long")
+    .max(255, "Password must be less than 255 characters")
+    .trim(),
+});
+
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
 // Validate function that throws ErrorHandler if validation fails
 export function validateRegisterInput(data: unknown): RegisterInput {
   const result = registerSchema.safeParse(data);
@@ -128,6 +142,16 @@ export function validateForgotPasswordInput(
   data: unknown
 ): ForgotPasswordInput {
   const result = forgotPasswordSchema.safeParse(data);
+  if (!result.success) {
+    const errorMessage = formatZodError(result.error);
+    throw new ErrorHandler(400, errorMessage);
+  }
+
+  return result.data;
+}
+
+export function validateResetPasswordInput(data: unknown): ResetPasswordInput {
+  const result = resetPasswordSchema.safeParse(data);
   if (!result.success) {
     const errorMessage = formatZodError(result.error);
     throw new ErrorHandler(400, errorMessage);

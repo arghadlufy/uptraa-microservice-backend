@@ -4,6 +4,7 @@ import {
   validateForgotPasswordInput,
   validateLoginInput,
   validateRegisterInput,
+  validateResetPasswordInput,
 } from "../utils/validations/auth.js";
 import { sql } from "../utils/db.js";
 import { ErrorHandler } from "../utils/error-handler.js";
@@ -13,6 +14,7 @@ import axios from "axios";
 import jwt from "jsonwebtoken";
 import { forgotPasswordTemplate } from "../utils/email/forgot-password-template.js";
 import { publistToTopic } from "../producer.js";
+import { redisClient } from "../index.js";
 
 export const registerUser = tryCatch(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -163,6 +165,13 @@ export const forgotPassword = tryCatch(
 
     const resetPasswordUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
 
+    await redisClient.set(`forgot:${email}`, resetToken, {
+      expiration: {
+        type: "EX",
+        value: Number(process.env.REDIS_RESET_PASSWORD_EXPIRES_IN),
+      },
+    });
+
     const message = {
       to: email,
       subject: "Uptraa - Reset Password",
@@ -175,6 +184,41 @@ export const forgotPassword = tryCatch(
       success: true,
       message:
         "If the email exists, a password reset email will be sent to you",
+    });
+  }
+);
+
+export const resetPassword = tryCatch(
+  async (req: Request, res: Response, next: NextFunction) => {
+    // Validate and get typed data
+    const validatedData = validateResetPasswordInput(req.body);
+    const { token, password } = validatedData;
+
+    let decodedToken: any;
+    try {
+      decodedToken = jwt.verify(token, process.env.JWT_SECRET! as string);
+    } catch (error) {
+      throw new ErrorHandler(401, "Invalid or expired token");
+    }
+
+    if (decodedToken.type !== "reset") {
+      throw new ErrorHandler(401, "Invalid token");
+    }
+
+    const resetToken = await redisClient.get(`forgot:${decodedToken.email}`);
+    if (!resetToken || resetToken !== token) {
+      throw new ErrorHandler(401, "Invalid token");
+    }
+
+    await redisClient.del(`forgot:${decodedToken.email}`);
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await sql`UPDATE users SET password = ${hashedPassword} WHERE email = ${decodedToken.email}`;
+
+    res.status(200).json({
+      success: true,
+      message: "Password reset successfully",
     });
   }
 );
