@@ -116,3 +116,43 @@ export const updateProfilePicture = tryCatch(
     });
   }
 );
+
+export const updateResume = tryCatch(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const user = req.user;
+    if (!user) {
+      throw new ErrorHandler(401, "Authentication required");
+    }
+    const file = req.file;
+
+    if (!file) {
+      throw new ErrorHandler(400, "Profile picture is required");
+    }
+
+    const fileBuffer = getBuffer(file);
+
+    if (!fileBuffer || !fileBuffer.content) {
+      throw new ErrorHandler(400, "Invalid file");
+    }
+
+    const oldResumePublicId = user.resume_public_id;
+
+    const { data } = await axios.post(
+      `${process.env.PACKAGES_SERVICE_URL}/api/packages/upload`,
+      {
+        buffer: fileBuffer.content,
+        public_id: oldResumePublicId,
+      }
+    );
+
+    const [updatedUser] = await sql`
+      UPDATE users SET resume = ${data.url}, resume_public_id = ${data.public_id} WHERE id = ${user.id} RETURNING id, name, email, phone_number, role, bio, resume, resume_public_id, profile_pic, profile_pic_public_id, created_at, updated_at
+    `;
+
+    res.status(200).json({
+      success: true,
+      message: "Resume updated successfully",
+      user: updatedUser,
+    });
+  }
+);
