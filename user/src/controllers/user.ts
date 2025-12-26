@@ -5,6 +5,7 @@ import { sql } from "../utils/db.js";
 import { ErrorHandler } from "../utils/error-handler.js";
 import {
   validateAddSkillToUserInput,
+  validateRemoveSkillFromUserInput,
   validateUpdateUserProfileInput,
 } from "../utils/validations/user.js";
 import { getBuffer } from "../utils/buffer.js";
@@ -160,6 +161,35 @@ export const updateResume = tryCatch(
   }
 );
 
+export const allSkills = tryCatch(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const skills = await sql`SELECT id, name FROM skills`;
+    res.status(200).json({
+      success: true,
+      message: "All skills fetched successfully",
+      skills,
+    });
+  }
+);
+
+export const getUserSkills = tryCatch(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const user = req.user;
+    if (!user) {
+      throw new ErrorHandler(401, "Authentication required");
+    }
+
+    const userSkills =
+      await sql`SELECT s.name FROM skills s JOIN user_skills us ON s.id = us.skill_id WHERE us.user_id = ${user.id}`;
+
+    res.status(200).json({
+      success: true,
+      message: "User skills fetched successfully",
+      userSkills,
+    });
+  }
+);
+
 export const addSkillToUser = tryCatch(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const user = req.user;
@@ -229,6 +259,44 @@ export const addSkillToUser = tryCatch(
       success: true,
       message: "Skill added to user successfully",
       userSkill: newUserSkillResult[0],
+    });
+  }
+);
+
+export const removeSkillFromUser = tryCatch(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const user = req.user;
+    if (!user) {
+      throw new ErrorHandler(401, "Authentication required");
+    }
+
+    const validatedData = validateRemoveSkillFromUserInput(req.body);
+    const { name } = validatedData;
+
+    // remove it from user_skills table only. do not delete the skill from skills table.
+    // 1. check if skill exists in skills table by name
+    // 2. check if skill exists in user_skills table
+    // 3. remove it from user_skills table
+
+    let existingSkill = await sql`SELECT id FROM skills WHERE name = ${name}`;
+    if (existingSkill.length === 0) {
+      throw new ErrorHandler(404, "Skill not found");
+    }
+
+    let existingUserSkill =
+      await sql`SELECT user_id, skill_id FROM user_skills WHERE user_id = ${user.id} AND skill_id = ${existingSkill[0]?.id}`;
+
+    if (existingUserSkill.length === 0) {
+      throw new ErrorHandler(404, "Skill not found in user's skills");
+    }
+
+    const [removedUserSkill] =
+      await sql`DELETE FROM user_skills WHERE user_id = ${user.id} AND skill_id = ${existingSkill[0]?.id} RETURNING user_id, skill_id`;
+
+    res.status(200).json({
+      success: true,
+      message: "Skill removed from user successfully",
+      userSkill: removedUserSkill,
     });
   }
 );
