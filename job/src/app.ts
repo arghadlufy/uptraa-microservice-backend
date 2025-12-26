@@ -1,5 +1,5 @@
 import express from "express";
-import userRoutes from "./routes/user.js";
+import jobRoutes from "./routes/job.js";
 import { consoleLogger, requestLogger } from "./utils/logger.js";
 import cors from "cors";
 
@@ -18,6 +18,6 @@ if (process.env.NODE_ENV !== "production") {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use("/api/user", userRoutes);
+app.use("/api/job", jobRoutes);
 
 export default app;

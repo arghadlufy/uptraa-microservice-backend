@@ -2,8 +2,11 @@ import express from "express";
 import authRoutes from "./routes/auth.js";
 import { consoleLogger, requestLogger } from "./utils/logger.js";
 import { connectKafka } from "./producer.js";
+import cors from "cors";
 
 const app = express();
+
+app.use(cors());
 
 // Request logging - log to file
 app.use(requestLogger);
