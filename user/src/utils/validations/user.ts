@@ -13,10 +13,37 @@ export const updateUserProfileSchema = z
 
 export type UpdateUserProfileInput = z.infer<typeof updateUserProfileSchema>;
 
+export const addSkillToUserSchema = z
+  .object({
+    name: z
+      .string({ message: "Skill name must be a string" })
+      .min(1, "Skill name cannot be empty")
+      .max(100, "Skill name must be less than 100 characters")
+      .trim()
+      .regex(
+        /^[A-Z][a-z]*( [A-Z][a-z]*)*$/,
+        "Skill name must start with a capital letter, each word must start with a capital letter, and only letters and spaces are allowed (no numbers or special characters)"
+      ),
+  })
+  .strict();
+
+export type AddSkillToUserInput = z.infer<typeof addSkillToUserSchema>;
+
 export function validateUpdateUserProfileInput(
   data: unknown
 ): UpdateUserProfileInput {
   const result = updateUserProfileSchema.safeParse(data);
+  if (!result.success) {
+    const errorMessage = formatZodError(result.error);
+    throw new ErrorHandler(400, errorMessage);
+  }
+  return result.data;
+}
+
+export function validateAddSkillToUserInput(
+  data: unknown
+): AddSkillToUserInput {
+  const result = addSkillToUserSchema.safeParse(data);
   if (!result.success) {
     const errorMessage = formatZodError(result.error);
     throw new ErrorHandler(400, errorMessage);
