@@ -28,22 +28,50 @@ export const getUserProfile = tryCatch(
     const { id } = req.params;
 
     const users = await sql`
-    SELECT u.id, u.name, u.email, u.phone_number, u.role, u.bio, u.resume, u.resume_public_id, u.profile_pic, u.profile_pic_public_id, u.subscription, ARRAY_AGG(s.name)
-    FILTER (WHERE s.name IS NOT NULL) AS skills
-    FROM users u
-    LEFT JOIN user_skills us ON u.id = us.user_id
-    LEFT JOIN skills s ON us.skill_id = s.id
-    WHERE u.id = ${id}
-    GROUP BY u.id
-`;
+      SELECT 
+        u.id, 
+        u.name, 
+        u.email, 
+        u.phone_number, 
+        u.role, 
+        u.bio, 
+        u.resume, 
+        u.resume_public_id, 
+        u.profile_pic, 
+        u.profile_pic_public_id, 
+        u.subscription,
+        CASE 
+          WHEN u.location IS NOT NULL THEN ST_Y(u.location)::float 
+          ELSE NULL 
+        END AS latitude,
+        CASE 
+          WHEN u.location IS NOT NULL THEN ST_X(u.location)::float 
+          ELSE NULL 
+        END AS longitude,
+        ARRAY_AGG(s.name) FILTER (WHERE s.name IS NOT NULL) AS skills
+      FROM users u
+      LEFT JOIN user_skills us ON u.id = us.user_id
+      LEFT JOIN skills s ON us.skill_id = s.id
+      WHERE u.id = ${id}
+      GROUP BY u.id, u.location
+    `;
 
     if (users.length === 0) {
       throw new ErrorHandler(404, "User not found");
     }
 
-    const user = users[0] as User;
-
-    user.skills = user.skills ? user.skills : [];
+    const userRow = users[0] as any;
+    const user: User = {
+      ...userRow,
+      skills: userRow.skills ? userRow.skills : [],
+      location:
+        userRow.latitude !== null && userRow.longitude !== null
+          ? {
+              latitude: userRow.latitude,
+              longitude: userRow.longitude,
+            }
+          : undefined,
+    };
 
     res.status(200).json({
       success: true,
@@ -61,23 +89,106 @@ export const updateUserProfile = tryCatch(
     }
 
     const validatedData = validateUpdateUserProfileInput(req.body);
-    const { name, phone_number, bio } = validatedData;
+    const { name, phone_number, bio, location } = validatedData;
 
     const newName = name || user.name;
     const newPhoneNumber = phone_number || user.phone_number;
-    const newBio = bio || user.bio;
+    const newBio = bio !== undefined ? bio : user.bio;
 
-    const [updatedUser] = await sql`
-          UPDATE users SET name = ${newName}, phone_number = ${newPhoneNumber}, bio = ${newBio} 
-          WHERE id = ${user.id} 
-          RETURNING id, name, email, phone_number, role, bio, created_at, updated_at
-          `;
+    // Handle location update with PostGIS POINT
+    // PostGIS POINT format: ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)
+    // Note: POINT uses (longitude, latitude) order, not (latitude, longitude)
+    if (location) {
+      const [updatedUser] = await sql`
+        UPDATE users 
+        SET 
+          name = ${newName},
+          phone_number = ${newPhoneNumber},
+          bio = ${newBio},
+          location = ST_SetSRID(ST_MakePoint(${location.longitude}, ${location.latitude}), 4326)
+        WHERE id = ${user.id}
+        RETURNING 
+          id, 
+          name, 
+          email, 
+          phone_number, 
+          role, 
+          bio,
+          CASE 
+            WHEN location IS NOT NULL THEN ST_Y(location)::float 
+            ELSE NULL 
+          END AS latitude,
+          CASE 
+            WHEN location IS NOT NULL THEN ST_X(location)::float 
+            ELSE NULL 
+          END AS longitude,
+          created_at, 
+          updated_at
+      `;
 
-    res.status(200).json({
-      success: true,
-      message: "User profile updated successfully",
-      user: updatedUser,
-    });
+      const updatedUserRow = updatedUser as any;
+      const updatedUserWithLocation: User = {
+        ...updatedUserRow,
+        location:
+          updatedUserRow.latitude !== null && updatedUserRow.longitude !== null
+            ? {
+                latitude: updatedUserRow.latitude,
+                longitude: updatedUserRow.longitude,
+              }
+            : undefined,
+      };
+
+      return res.status(200).json({
+        success: true,
+        message: "User profile updated successfully",
+        user: updatedUserWithLocation,
+      });
+    } else {
+      // Update without location
+      const [updatedUser] = await sql`
+        UPDATE users 
+        SET 
+          name = ${newName},
+          phone_number = ${newPhoneNumber},
+          bio = ${newBio}
+        WHERE id = ${user.id}
+        RETURNING 
+          id, 
+          name, 
+          email, 
+          phone_number, 
+          role, 
+          bio,
+          CASE 
+            WHEN location IS NOT NULL THEN ST_Y(location)::float 
+            ELSE NULL 
+          END AS latitude,
+          CASE 
+            WHEN location IS NOT NULL THEN ST_X(location)::float 
+            ELSE NULL 
+          END AS longitude,
+          created_at, 
+          updated_at
+      `;
+
+      const updatedUserRow = updatedUser as any;
+      const updatedUserWithLocation: User = {
+        ...updatedUserRow,
+        location:
+          updatedUserRow.latitude !== null && updatedUserRow.longitude !== null
+            ? {
+                latitude: updatedUserRow.latitude,
+                longitude: updatedUserRow.longitude,
+              }
+            : undefined,
+      };
+
+      return res.status(200).json({
+        success: true,
+        message: "User profile updated successfully",
+        user: updatedUserWithLocation,
+      });
+    }
   }
 );
 

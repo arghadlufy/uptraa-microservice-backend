@@ -8,6 +8,8 @@
     "start": "node dist/index.js",
     "build": "npm install && tsc",
     "dev": "nodemon --exec tsx ./src/index.ts",
+    "migrate": "tsx ./src/migrations/add-company-foreign-key.ts",
+    "migrate:location": "tsx ./src/migrations/add-location-postgis.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

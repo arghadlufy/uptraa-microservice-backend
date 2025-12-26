@@ -8,6 +8,22 @@ export const updateUserProfileSchema = z
       .string({ message: "Phone number must be a string" })
       .optional(),
     bio: z.string({ message: "Bio must be a string" }).optional(),
+    location: z
+      .object({
+        latitude: z
+          .number({
+            message: "Latitude must be a number",
+          })
+          .min(-90, "Latitude must be between -90 and 90")
+          .max(90, "Latitude must be between -90 and 90"),
+        longitude: z
+          .number({
+            message: "Longitude must be a number",
+          })
+          .min(-180, "Longitude must be between -180 and 180")
+          .max(180, "Longitude must be between -180 and 180"),
+      })
+      .optional(),
   })
   .strict(); // strict means that the object must match the schema exactly, no extra properties allowed
 

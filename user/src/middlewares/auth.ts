@@ -16,6 +16,10 @@ export interface User {
   profile_pic_public_id?: string;
   subscription?: string;
   skills?: string[];
+  location?: {
+    latitude: number;
+    longitude: number;
+  };
   created_at?: Date;
   updated_at?: Date;
 }
@@ -43,13 +47,32 @@ export const isAuth = async (
     }
 
     const users = await sql`
-        SELECT u.id, u.name, u.email, u.phone_number, u.role, u.bio, u.resume, u.resume_public_id, u.profile_pic, u.profile_pic_public_id, u.subscription, ARRAY_AGG(s.name)
-        FILTER (WHERE s.name IS NOT NULL) AS skills
+        SELECT 
+          u.id, 
+          u.name, 
+          u.email, 
+          u.phone_number, 
+          u.role, 
+          u.bio, 
+          u.resume, 
+          u.resume_public_id, 
+          u.profile_pic, 
+          u.profile_pic_public_id, 
+          u.subscription,
+          CASE 
+            WHEN u.location IS NOT NULL THEN ST_Y(u.location)::float 
+            ELSE NULL 
+          END AS latitude,
+          CASE 
+            WHEN u.location IS NOT NULL THEN ST_X(u.location)::float 
+            ELSE NULL 
+          END AS longitude,
+          ARRAY_AGG(s.name) FILTER (WHERE s.name IS NOT NULL) AS skills
         FROM users u
         LEFT JOIN user_skills us ON u.id = us.user_id
         LEFT JOIN skills s ON us.skill_id = s.id
         WHERE u.id = ${id}
-        GROUP BY u.id
+        GROUP BY u.id, u.location
     `;
 
     if (users.length === 0) {
@@ -59,9 +82,18 @@ export const isAuth = async (
       );
     }
 
-    const user = users[0] as User;
-
-    user.skills = user.skills ? user.skills : [];
+    const userRow = users[0] as any;
+    const user: User = {
+      ...userRow,
+      skills: userRow.skills ? userRow.skills : [],
+      location:
+        userRow.latitude !== null && userRow.longitude !== null
+          ? {
+              latitude: userRow.latitude,
+              longitude: userRow.longitude,
+            }
+          : undefined,
+    };
 
     req.user = user;
 
